@@ -148,6 +148,6 @@ deploy:
         --set ciVars.domain="$DOMAIN" \
         --set ciVars.CI_ENVIRONMENT_SLUG="$CI_ENVIRONMENT_SLUG" \
         --set ciVars.CI_PROJECT_PATH_SLUG="$CI_PROJECT_PATH_SLUG" \
-        --set ingress.annotations="\{\"traefik.ingress.kubernetes.io/router.middlewares\": \"kube-system-redirect-to-https@kubernetescrd\"\}" \
+        --set ingress.annotations="\{\"traefik.ingress.kubernetes.io\/router.middlewares\": \"kube-system-redirect-to-https@kubernetescrd\"\}" \
         live \
         ./charts/app
