@@ -89,6 +89,7 @@ deploy_review:
   variables:
     DOMAIN: "$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
   script:
+    - sleep 120
     - |
       helm upgrade \
         --namespace $KUBE_NAMESPACE \
