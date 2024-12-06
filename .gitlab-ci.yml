@@ -1,0 +1,152 @@
+stages:
+  - prepare
+  - test
+  - compile
+  - build
+  - review
+  - deploy
+
+variables:
+  KUBE_NAMESPACE: gitlab-go-kubernetes
+  KUBE_CLUSTER: k3s-it-prd-infra-shared-01
+  CI_REGISTRY_IMAGE: harbor.home.local/library/gitlab-go-kubernetes
+  CI_REGISTRY: harbor.home.local
+  LIVE_DOMAIN: go.home.local
+
+prepare:
+  stage: prepare
+  image:
+    name: swr.cn-east-3.myhuaweicloud.com/docker-io/kubectl:1.31.3-debian-12-r1
+    entrypoint: [""]
+  script:
+    - sed -i "s/KUBE_NAMESPACE/${KUBE_NAMESPACE}/" gitlab-ci/*.yaml
+    - kubectl config use-context kubernetes-admin@${KUBE_CLUSTER}
+    - kubectl apply -f gitlab-ci/namespace.yaml
+    - kubectl apply -f gitlab-ci/rbac.yaml
+
+image:
+  name: swr.cn-east-3.myhuaweicloud.com/docker-io/golang:1.23.4-bullseye
+  entrypoint: ["/bin/sh", "-c"]
+
+test:
+  stage: test
+  script:
+    - go env -w GOPROXY=https://mirrors.aliyun.com/goproxy/,direct
+    - make test
+
+compile:
+  stage: compile
+  script:
+    - go env -w GOPROXY=https://mirrors.aliyun.com/goproxy/,direct
+    - make build
+  artifacts:
+    paths:
+      - app
+
+build:
+  stage: build
+  image:
+    name: swr.cn-east-3.myhuaweicloud.com/docker-io/docker:27.3.1-dind
+    entrypoint: ["/bin/sh", "-c"]
+  variables:
+    DOCKER_IMAGE_NAME: $CI_REGISTRY_IMAGE:$CI_COMMIT_BRANCH
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+    DOCKER_TLS_VERIFY: 0
+    DOCKER_DAEMON_OPTIONS: "--insecure-registry=${CI_REGISTRY}"
+  services:
+    - name: swr.cn-east-3.myhuaweicloud.com/docker-io/docker:27.3.1-dind
+      alias: docker
+      entrypoint: ["sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS"]
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker build --pull -t "$DOCKER_IMAGE_NAME" .
+    - docker push "$DOCKER_IMAGE_NAME"
+    - |
+      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
+        docker tag "$DOCKER_IMAGE_NAME" "$CI_REGISTRY_IMAGE:latest"
+        docker push "$CI_REGISTRY_IMAGE:latest"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      exists:
+        - Dockerfile
+
+deploy_review:
+  stage: review
+  image:
+    name: swr.cn-east-3.myhuaweicloud.com/docker-io/helm:3.16.3
+    entrypoint: ["/bin/sh", "-c"]
+  only:
+    - branches
+  except:
+    - tags
+  environment:
+    name: "review/$CI_BUILD_REF_NAME"
+    url: "https://$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
+    on_stop: stop_review
+  variables:
+    DOMAIN: "$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
+  script:
+    - |
+      helm upgrade \
+        --namespace $KUBE_NAMESPACE \
+        --kube-context kubernetes-admin@${KUBE_CLUSTER} \
+        --install \
+        --values values.yaml \
+        --set image.repository="$CI_REGISTRY_IMAGE" \
+        --set image.tag="$CI_COMMIT_REF_NAME" \
+        --set ciVars.domain="$DOMAIN" \
+        --set ciVars.CI_ENVIRONMENT_SLUG="$CI_ENVIRONMENT_SLUG" \
+        --set ciVars.CI_PROJECT_PATH_SLUG="$CI_PROJECT_PATH_SLUG" \
+        "$CI_BUILD_REF_NAME" \
+        ./charts/app
+
+stop_review:
+  stage: review
+  image:
+    name: swr.cn-east-3.myhuaweicloud.com/docker-io/helm:3.16.3
+    entrypoint: ["/bin/sh", "-c"]
+  variables:
+    GIT_STRATEGY: "none"
+  only:
+    - branches
+  except:
+    - master
+    - main
+    - tags
+  environment:
+    name: "review/$CI_BUILD_REF_NAME"
+    action: stop
+  script:
+    - helm uninstall \
+      --namespace $KUBE_NAMESPACE \
+      --kube-context kubernetes-admin@${KUBE_CLUSTER} \
+      "$CI_BUILD_REF_NAME"
+
+deploy:
+  stage: deploy
+  image:
+    name: swr.cn-east-3.myhuaweicloud.com/docker-io/helm:3.16.3
+    entrypoint: ["/bin/sh", "-c"]
+  environment:
+    name: live
+    url: "https://$LIVE_DOMAIN"
+  variables:
+    DOMAIN: "$LIVE_DOMAIN"
+  script:
+    - |
+      helm upgrade \
+        --namespace $KUBE_NAMESPACE \
+        --kube-context kubernetes-admin@${KUBE_CLUSTER} \
+        --install \
+        --values values.yaml \
+        --set image.repository="$CI_REGISTRY_IMAGE" \
+        --set image.tag="$CI_COMMIT_BRANCH" \
+        --set ciVars.domain="$DOMAIN" \
+        --set ciVars.CI_ENVIRONMENT_SLUG="$CI_ENVIRONMENT_SLUG" \
+        --set ciVars.CI_PROJECT_PATH_SLUG="$CI_PROJECT_PATH_SLUG" \
+        --set ingress.annotations="\{\"traefik.ingress.kubernetes.io/router.middlewares\": \"kube-system-redirect-to-https@kubernetescrd\"\}" \
+        live \
+        ./charts/app
