@@ -36,7 +36,7 @@ spec:
             backend:
               serviceName: {{ $fullName }}
               servicePort: {{ $svcPort }}
-          pathType: Prefix
+            pathType: Prefix
           {{- end }}
     {{- end }}
   {{- end }}
