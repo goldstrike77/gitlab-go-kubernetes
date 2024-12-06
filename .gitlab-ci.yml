@@ -83,7 +83,7 @@ deploy_review:
   except:
     - tags
   environment:
-    name: review/$CI_COMMIT_REF_NAME
+    name: review-$CI_COMMIT_REF_NAME
     url: https://$CI_ENVIRONMENT_SLUG.home.local
     on_stop: stop_review
   variables:
@@ -100,7 +100,7 @@ deploy_review:
         --set ciVars.domain="$DOMAIN" \
         --set ciVars.CI_ENVIRONMENT_SLUG="$CI_ENVIRONMENT_SLUG" \
         --set ciVars.CI_PROJECT_PATH_SLUG="$CI_PROJECT_PATH_SLUG" \
-        "review/$CI_COMMIT_REF_NAME" \
+        "review-$CI_COMMIT_REF_NAME" \
         ./charts/app
 
 stop_review:
@@ -117,13 +117,13 @@ stop_review:
     - main
     - tags
   environment:
-    name: review/$CI_COMMIT_REF_NAME
+    name: review-$CI_COMMIT_REF_NAME
     action: stop
   script:
     - helm uninstall \
       --namespace $KUBE_NAMESPACE \
       --kube-context kubernetes-admin@${KUBE_CLUSTER} \
-      "review/$CI_COMMIT_REF_NAME"
+      "review-$CI_COMMIT_REF_NAME"
 
 deploy:
   stage: deploy
