@@ -83,16 +83,15 @@ deploy_review:
   except:
     - tags
   environment:
-    name: "review/$CI_BUILD_REF_NAME"
-    url: "https://$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://$CI_ENVIRONMENT_SLUG.home.local
     on_stop: stop_review
-    kubernetes:
-      namespace: "$KUBE_NAMESPACE"
   variables:
     DOMAIN: "$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
   script:
     - |
       helm upgrade \
+        --namespace $KUBE_NAMESPACE \
         --kube-context kubernetes-admin@${KUBE_CLUSTER} \
         --install \
         --values values.yaml \
@@ -118,12 +117,11 @@ stop_review:
     - main
     - tags
   environment:
-    name: "review/$CI_BUILD_REF_NAME"
+    name: review/$CI_COMMIT_REF_NAME
     action: stop
-    kubernetes:
-      namespace: "$KUBE_NAMESPACE"
   script:
     - helm uninstall \
+      --namespace $KUBE_NAMESPACE \
       --kube-context kubernetes-admin@${KUBE_CLUSTER} \
       "$CI_BUILD_REF_NAME"
 
@@ -135,13 +133,12 @@ deploy:
   environment:
     name: live
     url: "https://$LIVE_DOMAIN"
-    kubernetes:
-      namespace: "$KUBE_NAMESPACE"
   variables:
     DOMAIN: "$LIVE_DOMAIN"
   script:
     - |
       helm upgrade \
+        --namespace $KUBE_NAMESPACE \
         --kube-context kubernetes-admin@${KUBE_CLUSTER} \
         --install \
         --values values.yaml \
