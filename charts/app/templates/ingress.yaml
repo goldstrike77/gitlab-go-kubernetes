@@ -31,6 +31,7 @@ spec:
     - host: {{ tpl .host $ | quote }}
       http:
         paths:
+          pathType: Prefix
           {{- range .paths }}
           - path: {{ . }}
             backend:
