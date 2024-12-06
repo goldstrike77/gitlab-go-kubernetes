@@ -11,6 +11,7 @@ variables:
   KUBE_CLUSTER: k3s-it-prd-infra-shared-01
   CI_REGISTRY_IMAGE: harbor.home.local/library/gitlab-go-kubernetes
   CI_REGISTRY: harbor.home.local
+  REVIEW_BASE_DOMAIN: home.local
   LIVE_DOMAIN: go.home.local
 
 prepare:
@@ -84,12 +85,11 @@ deploy_review:
     - tags
   environment:
     name: review-$CI_COMMIT_REF_NAME
-    url: https://$CI_ENVIRONMENT_SLUG.home.local
+    url: https://CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN
     on_stop: stop_review
   variables:
-    DOMAIN: "$CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN"
+    DOMAIN: $CI_ENVIRONMENT_SLUG-$KUBE_NAMESPACE.$REVIEW_BASE_DOMAIN
   script:
-    - sleep 120
     - |
       helm upgrade \
         --namespace $KUBE_NAMESPACE \
@@ -134,9 +134,9 @@ deploy:
     entrypoint: ["/bin/sh", "-c"]
   environment:
     name: live
-    url: "https://$LIVE_DOMAIN"
+    url: https://$LIVE_DOMAIN
   variables:
-    DOMAIN: "$LIVE_DOMAIN"
+    DOMAIN: $LIVE_DOMAIN
   script:
     - |
       helm upgrade \
