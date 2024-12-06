@@ -100,7 +100,7 @@ deploy_review:
         --set ciVars.domain="$DOMAIN" \
         --set ciVars.CI_ENVIRONMENT_SLUG="$CI_ENVIRONMENT_SLUG" \
         --set ciVars.CI_PROJECT_PATH_SLUG="$CI_PROJECT_PATH_SLUG" \
-        "$CI_BUILD_REF_NAME" \
+        "$CI_COMMIT_REF_NAME" \
         ./charts/app
 
 stop_review:
@@ -123,7 +123,7 @@ stop_review:
     - helm uninstall \
       --namespace $KUBE_NAMESPACE \
       --kube-context kubernetes-admin@${KUBE_CLUSTER} \
-      "$CI_BUILD_REF_NAME"
+      "$CI_COMMIT_REF_NAME"
 
 deploy:
   stage: deploy
